@@ -1,4 +1,4 @@
-pretrained_model_path: "./ckpt/stable-diffusion-v1-5/"
+pretrained_model_path: "./ckpt/models--stable-diffusion-v1-5--stable-diffusion-v1-5/snapshots/f03de327dd89b501a01da37fc5240cf4fdba85a1"
 logdir: "./stage1_log/"
 validation_sample_logger:
     num_inference_steps: 40
@@ -15,9 +15,23 @@ val_batch_size: 1
 scale_lr: false
 lr_scheduler: constant
 lr_warmup_steps: 0
-use_8bit_adam: true
+use_8bit_adam: false
 adam_beta1: 0.9
 adam_beta2: 0.999
 adam_weight_decay: 0.01
 adam_epsilon: 1.0e-08
 max_grad_norm: 1.0
+
+# task
+dataset: vwp  # pororo flintstones vistsis vistdii
+out_mode: captions_links_images
+task: visualization  # continuation visualization
+
+start:
+end:
+
+vwp:
+  root_dir: /mnt/u14157_ic_nlp_001_files_nfs/nlpdata1/home/mamooler/storyboard/StoryGen/VWP/
+  max_length: 400
+  clip_embedding_tokens: 49408
+  blip_embedding_tokens: 30524
