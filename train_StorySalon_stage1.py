@@ -216,7 +216,7 @@ def train(
                 params.requires_grad = True
 
     if args.scale_lr:
-        learning_rate = (
+        args.learning_rate = (
             args.learning_rate
             * args.gradient_accumulation_steps
             * args.train_batch_size
@@ -402,8 +402,6 @@ def train(
         accelerator.log(logs, step=step)
     accelerator.end_training()
 
-
-from omegaconf import DictConfig
 
 if __name__ == "__main__":
     config = "./config/stage1_config.yml"
