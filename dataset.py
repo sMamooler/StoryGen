@@ -19,6 +19,9 @@ nltk.download("punkt")
 nltk.download("punkt_tab")
 
 
+PAD_IMG = "./vwp_pad_img.jpg"
+
+
 # This Simple Dataset is just for testing the pipeline works well.
 # Note: You should write a DataLoader suitable for your own Dataset!!!
 class SimpleDataset(Dataset):
@@ -803,18 +806,36 @@ class VWPDataset(Dataset):
             for i in range(len(sample[attribute_name]) - 3):
                 attribute_list.append(sample[attribute_name][i : i + 4])
 
+        def add_two_frames(sample, attribute_name, attribute_list) -> None:
+            if len(sample[attribute_name]) <= 1:
+                print(sample["scene_full_id"])
+                return
+            for i in range(len(sample[attribute_name])):
+                if i == 0:
+                    pad_element = PAD_IMG if attribute_name == "image_links" else ""
+                    attribute_list.append([pad_element, sample[attribute_name][i]])
+                else:
+                    attribute_list.append(
+                        [sample[attribute_name][i - 1], sample[attribute_name][i]]
+                    )
+
         for sample in vwp_data:
-            self.annt_ids.append(
-                sample["scene_full_id"] + "_" + str(sample["story_id"])
-            )
-            add_four_frames(sample, "narrative", self.narratives)
-            add_four_frames(sample, "image_links", self.images)
-            add_four_frames(sample, "captions", self.captions)
+            for i in range(len(sample["image_links"])):
+                self.annt_ids.append(
+                    sample["scene_full_id"]
+                    + "_"
+                    + str(sample["story_id"])
+                    + "_"
+                    + str(i)
+                )
+            add_two_frames(sample, "narrative", self.narratives)
+            add_two_frames(sample, "image_links", self.images)
+            add_two_frames(sample, "captions", self.captions)
 
             if subset == "test":
-                add_four_frames(sample, "llama31_caps", self.llama_captions)
-                add_four_frames(sample, "captions_links", self.cap_links)
-                add_four_frames(sample, "llama31_cap_links", self.llama_cap_links)
+                add_two_frames(sample, "llama31_caps", self.llama_captions)
+                add_two_frames(sample, "captions_links", self.cap_links)
+                add_two_frames(sample, "llama31_cap_links", self.llama_cap_links)
 
             link_map = {"nar": "links_to_nar", "cap": "links_between_cap"}
             for ent_type in ["key", "non_key"]:
@@ -832,34 +853,44 @@ class VWPDataset(Dataset):
                             else:
                                 links[entity2] = entity1  # current --> previous caption
                         links_set.append(links)
-                    for i in range(len(links_set) - 3):
-                        self.links[ent_type + "_" + link_type].append(
-                            links_set[i : i + 4]
-                        )
+                    # for i in range(len(links_set) - 3):
+                    #     self.links[ent_type + "_" + link_type].append(
+                    #         links_set[i : i + 4]
+                    #     )
+                    else:
+                        for i in range(len(links_set)):
+                            if i == 0:
+                                self.links[ent_type + "_" + link_type].append(
+                                    [{}, links_set[i]]
+                                )
+                            else:
+                                self.links[ent_type + "_" + link_type].append(
+                                    [links_set[i - 1], links_set[i]]
+                                )
+
+        self.augment = transforms.Compose(
+            [
+                transforms.ToPILImage(),
+                transforms.Resize([224, 512]),
+                transforms.ToTensor(),
+                transforms.Normalize([0.5], [0.5]),
+            ]
+        )
 
         # self.augment = transforms.Compose(
         #     [
         #         transforms.ToPILImage(),
         #         transforms.Resize([224, 512]),
+        #         # transforms.RandomAffine(
+        #         #     degrees=(-10, 10), translate=(0.1, 0.1), scale=(0.9, 1.1)
+        #         # ),
+        #         # transforms.ColorJitter(
+        #         #     brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1
+        #         # ),
+        #         # transforms.RandomHorizontalFlip(),
         #         transforms.ToTensor(),
-        #         transforms.Normalize([0.5], [0.5]),
         #     ]
         # )
-
-        self.augment = transforms.Compose(
-            [
-                transforms.ToPILImage(),
-                transforms.Resize([512, 512]),
-                # transforms.RandomAffine(
-                #     degrees=(-10, 10), translate=(0.1, 0.1), scale=(0.9, 1.1)
-                # ),
-                # transforms.ColorJitter(
-                #     brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1
-                # ),
-                # transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-            ]
-        )
 
         self.dataset = args.dataset
         self.max_length = args.get(args.dataset).max_length
@@ -926,11 +957,16 @@ class VWPDataset(Dataset):
         images = []
         texts = []
         for tid, img_link in enumerate(self.images[index]):
-            out_pth = os.path.join(self.root_dir + "images", img_link.split("/")[-2])
-            img_file = os.path.join(out_pth, img_link.split("/")[-1])
-            os.makedirs(out_pth, exist_ok=True)
-            if not os.path.exists(img_file):
-                wget.download(img_link, out=out_pth)
+            if img_link == PAD_IMG:
+                img_file = PAD_IMG
+            else:
+                out_pth = os.path.join(
+                    self.root_dir + "images", img_link.split("/")[-2]
+                )
+                img_file = os.path.join(out_pth, img_link.split("/")[-1])
+                os.makedirs(out_pth, exist_ok=True)
+                if not os.path.exists(img_file) and img_file != PAD_IMG:
+                    wget.download(img_link, out=out_pth)
             img = np.array(Image.open(img_file).convert("RGB"))
             images.append(img)
 
@@ -942,20 +978,20 @@ class VWPDataset(Dataset):
         images = images[1:] if self.args.task == "continuation" else images
         images = (
             torch.stack([self.augment(im) for im in images])
-            # if self.subset in ["train", "val"]
-            # else torch.from_numpy(np.array(images))
+            if self.subset in ["train", "val"]
+            else torch.from_numpy(np.array(images))
         )
 
-        ref_images = images[0:3]
-        image = images[3]
+        ref_images = images[0:1]
+        image = images[1]
 
-        ref_prompts = texts[0:3]
-        prompt = texts[3]
+        ref_prompts = texts[0:1]
+        prompt = texts[1]
 
-        for ref_image in ref_images:
-            ref_image = ref_image * 2.0 - 1.0
-        # ref_images = ref_images * 2. - 1.
-        image = image * 2.0 - 1.0
+        # for ref_image in ref_images:
+        #     ref_image = ref_image * 2.0 - 1.0
+        # # ref_images = ref_images * 2. - 1.
+        # image = image * 2.0 - 1.0
 
         # Unconditional generation for classifier-free guidance
         if self.subset == "train":
@@ -964,11 +1000,12 @@ class VWPDataset(Dataset):
                 prompt = ""
             p = random.uniform(0, 1)
             if p < 0.1:
-                ref_prompts = ["", "", ""]
+                ref_prompts = [""]
                 ref_images = ref_images * 0.0
 
         mask = np.zeros(image.shape, dtype=np.uint8)
         mask = torch.from_numpy(np.ascontiguousarray(mask)).float()
+        mask = self.augment(mask)
 
         # from torchvision.utils import save_image
 
@@ -992,6 +1029,7 @@ class VWPDataset(Dataset):
         # save_image(mask, f"dataloader_samples/{self.annt_ids[index]}_mask.png")
 
         return {
+            "sample_id": self.annt_ids[index],
             "ref_image": ref_images,
             "image": image,
             "mask": mask,

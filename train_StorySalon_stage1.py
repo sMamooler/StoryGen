@@ -93,7 +93,7 @@ class SampleLogger:
             v_refs = []
             ref_images = ref_images.squeeze(0)
             for ref_image in ref_images:
-                # v_ref = (ref_image + 1.) / 2. # for visualization
+                v_ref = (ref_image + 1.0) / 2.0  # for visualization
                 v_ref = ref_image.permute(1, 2, 0).detach().cpu().numpy()
                 v_refs.append(v_ref)
             for i in range(len(v_refs)):
@@ -247,7 +247,7 @@ def train(
     # train_dataset = StorySalonDataset(root="./StorySalon/", dataset_name="train")
     # val_dataset = StorySalonDataset(root="./StorySalon/", dataset_name="test")
     train_dataset = VWPDataset("train", args)
-    val_dataset = VWPDataset("test", args)
+    val_dataset = VWPDataset("val", args)
 
     print(train_dataset.__len__())
     print(val_dataset.__len__())
