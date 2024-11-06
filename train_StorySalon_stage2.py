@@ -369,17 +369,19 @@ def train(
         p = random.uniform(0, 1)
 
         # Use random number of reference frames for training
-        for i in range(3):
+        for i in range(args.num_ref_imgs):
             if (p < 0.3) or (0.3 <= p < 0.6 and i > 0) or (p >= 0.6 and i > 1):
                 noisy_ref_image = noise_scheduler.add_noise(
-                    ref_image_list[i], ref_noise, ref_timesteps * (3 - i)
+                    ref_image_list[i],
+                    ref_noise,
+                    ref_timesteps * (args.num_ref_imgs - i),
                 )
                 prev_encoder_hidden_states = text_encoder(
                     t_prev_prompt_ids[i].to(accelerator.device)
                 )[0]
                 img_dif_conditions = unet(
                     noisy_ref_image,
-                    ref_timesteps * (3 - i),
+                    ref_timesteps * (args.num_ref_imgs - i),
                     encoder_hidden_states=prev_encoder_hidden_states,
                     return_dict=False,
                 )[1]

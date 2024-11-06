@@ -799,28 +799,59 @@ class VWPDataset(Dataset):
             "non_key_cap": [],
         }
 
-        def add_four_frames(sample, attribute_name, attribute_list) -> None:
-            if len(sample[attribute_name]) <= 3:
+        def add_ref_and_cur_frames(
+            args, sample, attribute_name, attribute_list
+        ) -> None:
+            if len(sample[attribute_name]) <= args.num_ref_imgs:
                 print(sample["scene_full_id"])
                 return
-            for i in range(len(sample[attribute_name]) - 3):
-                attribute_list.append(sample[attribute_name][i : i + 4])
-
-        def add_two_frames(sample, attribute_name, attribute_list) -> None:
-            if len(sample[attribute_name]) <= 1:
-                print(sample["scene_full_id"])
-                return
-            for i in range(len(sample[attribute_name])):
-                if i == 0:
-                    pad_element = PAD_IMG if attribute_name == "image_links" else ""
-                    attribute_list.append([pad_element, sample[attribute_name][i]])
+            else:
+                if args.num_ref_imgs == 1:
+                    for i in range(len(sample[attribute_name])):
+                        if i == 0:
+                            pad_element = (
+                                PAD_IMG if attribute_name == "image_links" else ""
+                            )
+                            attribute_list.append(
+                                [pad_element, sample[attribute_name][i]]
+                            )
+                        else:
+                            attribute_list.append(
+                                [
+                                    sample[attribute_name][i - 1],
+                                    sample[attribute_name][i],
+                                ]
+                            )
                 else:
-                    attribute_list.append(
-                        [sample[attribute_name][i - 1], sample[attribute_name][i]]
-                    )
+                    for i in range(len(sample[attribute_name]) - args.num_ref_imgs):
+                        attribute_list.append(
+                            sample[attribute_name][i : i + args.num_ref_imgs + 1]
+                        )
 
+        # def add_four_frames(sample, attribute_name, attribute_list) -> None:
+        #     if len(sample[attribute_name]) <= 3:
+        #         print(sample["scene_full_id"])
+        #         return
+        #     for i in range(len(sample[attribute_name]) - 3):
+        #         attribute_list.append(sample[attribute_name][i : i + 4])
+
+        # def add_two_frames(sample, attribute_name, attribute_list) -> None:
+        #     if len(sample[attribute_name]) <= 1:
+        #         print(sample["scene_full_id"])
+        #         return
+        #     for i in range(len(sample[attribute_name])):
+        #         if i == 0:
+        #             pad_element = PAD_IMG if attribute_name == "image_links" else ""
+        #             attribute_list.append([pad_element, sample[attribute_name][i]])
+        #         else:
+        #             attribute_list.append(
+        #                 [sample[attribute_name][i - 1], sample[attribute_name][i]]
+        #             )
         for sample in vwp_data:
-            for i in range(len(sample["image_links"])):
+            if len(sample["image_links"]) <= args.num_ref_imgs:
+                print(sample["scene_full_id"])
+                return
+            for i in range(len(sample["image_links"]) - args.num_ref_imgs):
                 self.annt_ids.append(
                     sample["scene_full_id"]
                     + "_"
@@ -828,14 +859,28 @@ class VWPDataset(Dataset):
                     + "_"
                     + str(i)
                 )
-            add_two_frames(sample, "narrative", self.narratives)
-            add_two_frames(sample, "image_links", self.images)
-            add_two_frames(sample, "captions", self.captions)
+            # add_two_frames(sample, "narrative", self.narratives)
+            # add_two_frames(sample, "image_links", self.images)
+            # add_two_frames(sample, "captions", self.captions)
+
+            add_ref_and_cur_frames(self.args, sample, "narrative", self.narratives)
+            add_ref_and_cur_frames(self.args, sample, "image_links", self.images)
+            add_ref_and_cur_frames(self.args, sample, "captions", self.captions)
 
             if subset == "test":
-                add_two_frames(sample, "llama31_caps", self.llama_captions)
-                add_two_frames(sample, "captions_links", self.cap_links)
-                add_two_frames(sample, "llama31_cap_links", self.llama_cap_links)
+                # add_two_frames(sample, "llama31_caps", self.llama_captions)
+                # add_two_frames(sample, "captions_links", self.cap_links)
+                # add_two_frames(sample, "llama31_cap_links", self.llama_cap_links)
+
+                add_ref_and_cur_frames(
+                    self.args, sample, "llama31_caps", self.llama_captions
+                )
+                add_ref_and_cur_frames(
+                    self.args, sample, "captions_links", self.cap_links
+                )
+                add_ref_and_cur_frames(
+                    self.args, sample, "llama31_cap_links", self.llama_cap_links
+                )
 
             link_map = {"nar": "links_to_nar", "cap": "links_between_cap"}
             for ent_type in ["key", "non_key"]:
@@ -853,11 +898,8 @@ class VWPDataset(Dataset):
                             else:
                                 links[entity2] = entity1  # current --> previous caption
                         links_set.append(links)
-                    # for i in range(len(links_set) - 3):
-                    #     self.links[ent_type + "_" + link_type].append(
-                    #         links_set[i : i + 4]
-                    #     )
-                    else:
+
+                    if self.args.num_ref_imgs == 1:
                         for i in range(len(links_set)):
                             if i == 0:
                                 self.links[ent_type + "_" + link_type].append(
@@ -867,11 +909,16 @@ class VWPDataset(Dataset):
                                 self.links[ent_type + "_" + link_type].append(
                                     [links_set[i - 1], links_set[i]]
                                 )
+                    else:
+                        for i in range(len(links_set) - self.args.num_ref_imgs):
+                            self.links[ent_type + "_" + link_type].append(
+                                links_set[i : i + self.args.num_ref_imgs + 1]
+                            )
 
         self.augment = transforms.Compose(
             [
                 transforms.ToPILImage(),
-                transforms.Resize([224, 512]),
+                transforms.Resize([args.vwp.img_width, args.vwp.img_height]),
                 transforms.ToTensor(),
                 transforms.Normalize([0.5], [0.5]),
             ]
@@ -982,11 +1029,11 @@ class VWPDataset(Dataset):
             else torch.from_numpy(np.array(images))
         )
 
-        ref_images = images[0:1]
-        image = images[1]
+        ref_images = images[0 : self.args.num_ref_imgs]
+        image = images[self.args.num_ref_imgs]
 
-        ref_prompts = texts[0:1]
-        prompt = texts[1]
+        ref_prompts = texts[0 : self.args.num_ref_imgs]
+        prompt = texts[self.args.num_ref_imgs]
 
         # for ref_image in ref_images:
         #     ref_image = ref_image * 2.0 - 1.0
@@ -1000,7 +1047,7 @@ class VWPDataset(Dataset):
                 prompt = ""
             p = random.uniform(0, 1)
             if p < 0.1:
-                ref_prompts = [""]
+                ref_prompts = ["" for _ in range(self.args.num_ref_imgs)]
                 ref_images = ref_images * 0.0
 
         mask = np.zeros(image.shape, dtype=np.uint8)
@@ -1011,7 +1058,7 @@ class VWPDataset(Dataset):
 
         # for i, im in enumerate(ref_images):
         #     save_image(
-        #         im, f"dataloader_samples/{self.annt_ids[index]}_ref_image_{i}.png"
+        #         im* 2. - 1, f"dataloader_samples/{self.annt_ids[index]}_ref_image_{i}.png"
         #     )
         #     with open(
         #         f"dataloader_samples/{self.annt_ids[index]}_ref_prompt_{i}.txt", "w"
@@ -1022,11 +1069,11 @@ class VWPDataset(Dataset):
         #             print(ref_prompts)
         #             raise IndexError(e)
 
-        # save_image(image, f"dataloader_samples/{self.annt_ids[index]}_image.png")
+        # save_image(image* 2. - 1, f"dataloader_samples/{self.annt_ids[index]}_image.png")
         # with open(f"dataloader_samples/{self.annt_ids[index]}_prompt.txt", "w") as f:
         #     f.write(prompt)
 
-        # save_image(mask, f"dataloader_samples/{self.annt_ids[index]}_mask.png")
+        # save_image(mask* 2. - 1, f"dataloader_samples/{self.annt_ids[index]}_mask.png")
 
         return {
             "sample_id": self.annt_ids[index],

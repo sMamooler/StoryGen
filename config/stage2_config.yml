@@ -1,4 +1,4 @@
-pretrained_model_path: "./stage1_log/_241030-095658/checkpoint_15000"
+pretrained_model_path: "./stage1_log/_241104-134827/checkpoint_15000" #"./stage1_log/_241030-095658/checkpoint_15000"
 logdir: "./stage2_log/"
 validation_sample_logger:
     num_inference_steps: 40
@@ -24,8 +24,10 @@ max_grad_norm: 1.0
 
 # task
 dataset: vwp  # pororo flintstones vistsis vistdii
-out_mode: captions_links_images
+out_mode: images
 task: visualization  # continuation visualization
+
+num_ref_imgs: 1
 
 start:
 end:
@@ -35,3 +37,5 @@ vwp:
   max_length: 400
   clip_embedding_tokens: 49408
   blip_embedding_tokens: 30524
+  img_width: 512
+  img_height: 512
