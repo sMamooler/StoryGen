@@ -6,10 +6,14 @@ from collections import defaultdict
 import torch
 from diffusers.pipeline_utils import DiffusionPipeline
 from diffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
-from diffusers.schedulers import (DDIMScheduler, DPMSolverMultistepScheduler,
-                                  EulerAncestralDiscreteScheduler,
-                                  EulerDiscreteScheduler, LMSDiscreteScheduler,
-                                  PNDMScheduler)
+from diffusers.schedulers import (
+    DDIMScheduler,
+    DPMSolverMultistepScheduler,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
+    LMSDiscreteScheduler,
+    PNDMScheduler,
+)
 from diffusers.utils import is_accelerate_available, logging
 from einops import rearrange
 from transformers import CLIPTextModel, CLIPTokenizer
@@ -23,6 +27,7 @@ class StableDiffusionPipeline(DiffusionPipeline):
     r"""
     Pipeline for Stable Diffusion.
     """
+
     def __init__(
         self,
         vae: AutoencoderKL,
@@ -85,7 +90,12 @@ class StableDiffusionPipeline(DiffusionPipeline):
         return self.device
 
     def _encode_prompt(
-        self, prompt, device, num_images_per_prompt, do_classifier_free_guidance, negative_prompt
+        self,
+        prompt,
+        device,
+        num_images_per_prompt,
+        do_classifier_free_guidance,
+        negative_prompt,
     ):
         r"""
         Encodes the prompt into text encoder hidden states.
@@ -113,7 +123,9 @@ class StableDiffusionPipeline(DiffusionPipeline):
             return_tensors="pt",
         )
         text_input_ids = text_inputs.input_ids
-        untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pt").input_ids
+        untruncated_ids = self.tokenizer(
+            prompt, padding="longest", return_tensors="pt"
+        ).input_ids
 
         if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not torch.equal(
             text_input_ids, untruncated_ids
@@ -134,13 +146,17 @@ class StableDiffusionPipeline(DiffusionPipeline):
         else:
             attention_mask = None
 
-        text_embeddings = self.text_encoder(text_input_ids.to(device), attention_mask=attention_mask)
+        text_embeddings = self.text_encoder(
+            text_input_ids.to(device), attention_mask=attention_mask
+        )
         text_embeddings = text_embeddings[0]
-        
+
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         bs_embed, seq_len, _ = text_embeddings.shape
         text_embeddings = text_embeddings.repeat(1, num_images_per_prompt, 1)
-        text_embeddings = text_embeddings.view(bs_embed * num_images_per_prompt, seq_len, -1)
+        text_embeddings = text_embeddings.view(
+            bs_embed * num_images_per_prompt, seq_len, -1
+        )
 
         # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance:
@@ -180,13 +196,17 @@ class StableDiffusionPipeline(DiffusionPipeline):
             else:
                 attention_mask = None
 
-            uncond_embeddings = self.text_encoder(uncond_input.input_ids.to(device), attention_mask=attention_mask)
+            uncond_embeddings = self.text_encoder(
+                uncond_input.input_ids.to(device), attention_mask=attention_mask
+            )
             uncond_embeddings = uncond_embeddings[0]
 
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = uncond_embeddings.shape[1]
             uncond_embeddings = uncond_embeddings.repeat(1, num_images_per_prompt, 1)
-            uncond_embeddings = uncond_embeddings.view(batch_size * num_images_per_prompt, seq_len, -1)
+            uncond_embeddings = uncond_embeddings.view(
+                batch_size * num_images_per_prompt, seq_len, -1
+            )
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch to avoid doing two forward passes
@@ -209,28 +229,40 @@ class StableDiffusionPipeline(DiffusionPipeline):
         # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
         # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
         # and should be between [0, 1]
-        accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_eta = "eta" in set(
+            inspect.signature(self.scheduler.step).parameters.keys()
+        )
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
 
         # check if the scheduler accepts generator
-        accepts_generator = "generator" in set(inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_generator = "generator" in set(
+            inspect.signature(self.scheduler.step).parameters.keys()
+        )
         if accepts_generator:
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
     def check_inputs(self, prompt, height, width, callback_steps):
         if not isinstance(prompt, str) and not isinstance(prompt, list):
-            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
+            raise ValueError(
+                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
+            )
 
         if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
+            raise ValueError(
+                f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
+            )
 
         if (callback_steps is None) or (
-            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+            callback_steps is not None
+            and (not isinstance(callback_steps, int) or callback_steps <= 0)
         ):
-            raise ValueError(f"`callback_steps` has to be a positive integer but is {callback_steps} of type" f" {type(callback_steps)}.")
+            raise ValueError(
+                f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
+                f" {type(callback_steps)}."
+            )
 
     def prepare_latents(
         self,
@@ -255,15 +287,21 @@ class StableDiffusionPipeline(DiffusionPipeline):
             if isinstance(generator, list):
                 shape = (1,) + shape[1:]
                 latents = [
-                    torch.randn(shape, generator=generator[i], device=rand_device, dtype=dtype)
+                    torch.randn(
+                        shape, generator=generator[i], device=rand_device, dtype=dtype
+                    )
                     for i in range(batch_size)
                 ]
                 latents = torch.cat(latents, dim=0).to(device)
             else:
-                latents = torch.randn(shape, generator=generator, device=rand_device, dtype=dtype).to(device)
+                latents = torch.randn(
+                    shape, generator=generator, device=rand_device, dtype=dtype
+                ).to(device)
         else:
             if latents.shape != shape:
-                raise ValueError(f"Unexpected inputs shape, got {latents.shape}, expected {shape}")
+                raise ValueError(
+                    f"Unexpected inputs shape, got {latents.shape}, expected {shape}"
+                )
             latents = latents.to(device)
 
         # scale the initial noise by the standard deviation required by the scheduler
@@ -356,11 +394,24 @@ class StableDiffusionPipeline(DiffusionPipeline):
         do_classifier_free_guidance = guidance_scale > 1.0
 
         # 3. Encode input prompt
-        text_embeddings = self._encode_prompt(prompt, device, num_images_per_prompt, do_classifier_free_guidance, negative_prompt)
-        prev_text_embeddings = [] #[3 x (B,2,77,768)]
+        text_embeddings = self._encode_prompt(
+            prompt,
+            device,
+            num_images_per_prompt,
+            do_classifier_free_guidance,
+            negative_prompt,
+        )
+        prev_text_embeddings = []  # [3 x (B,2,77,768)]
         for p_prompt in prev_prompt:
-            prev_text_embeddings.append(self._encode_prompt(p_prompt, device, num_images_per_prompt, do_classifier_free_guidance, negative_prompt))
-        
+            prev_text_embeddings.append(
+                self._encode_prompt(
+                    p_prompt,
+                    device,
+                    num_images_per_prompt,
+                    do_classifier_free_guidance,
+                    negative_prompt,
+                )
+            )
 
         # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps, device=device)
@@ -368,7 +419,7 @@ class StableDiffusionPipeline(DiffusionPipeline):
 
         # 5. Prepare input variables
         num_channels_latents = self.unet.in_channels
-        
+
         latents = self.prepare_latents(
             batch_size * num_images_per_prompt,
             num_channels_latents,
@@ -377,37 +428,43 @@ class StableDiffusionPipeline(DiffusionPipeline):
             text_embeddings.dtype,
             device,
             generator,
-            latents
-        )# [B,4,64,64]
-        
+            latents,
+        )  # [B,4,64,64]
+
         # 6. Prepare extra step kwargs.
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
         # 6.5 Prepare image condition with VAE
-        image_prompt = image_prompt.to(device=device, dtype=latents.dtype) # (B,3,3,512,512)
-        t_image_prompts = torch.transpose(image_prompt, 0, 1) # (3, b, 3, 512, 512)
+        print(
+            "image_prompt", image_prompt.shape, image_prompt.min(), image_prompt.max()
+        )
+        image_prompt = image_prompt.to(
+            device=device, dtype=latents.dtype
+        )  # (B,3,3,512,512)
+        t_image_prompts = torch.transpose(image_prompt, 0, 1)  # (3, b, 3, 512, 512)
+
         ref_image_num = t_image_prompts.shape[0]
-        
+
         zero_image_prompt = t_image_prompts[0] * 0
         zero_image_prompt = self.vae.encode(zero_image_prompt).latent_dist.sample()
-        zero_image_prompt = zero_image_prompt * 0.18215 # [B,4,64,64]
+        zero_image_prompt = zero_image_prompt * 0.18215  # [B,4,64,64]
         zero_image_prompt = zero_image_prompt.repeat(num_images_per_prompt, 1, 1, 1)
         zero_image_prompts = []
         for i in range(ref_image_num):
-            zero_image_prompts.append(zero_image_prompt) #[3 x (B,4,64,64)]
+            zero_image_prompts.append(zero_image_prompt)  # [3 x (B,4,64,64)]
 
-        image_prompts = [] #[3 x (B,4,64,64)]
+        image_prompts = []  # [3 x (B,4,64,64)]
         for t_image_prompt in t_image_prompts:
             new_image_prompt = self.vae.encode(t_image_prompt).latent_dist.sample()
-            new_image_prompt = new_image_prompt * 0.18215 # [B,4,64,64]
+            new_image_prompt = new_image_prompt * 0.18215  # [B,4,64,64]
             new_image_prompt = new_image_prompt.repeat(num_images_per_prompt, 1, 1, 1)
-            image_prompts.append(new_image_prompt)       
-        
+            image_prompts.append(new_image_prompt)
+
         # 7. Denoising loop
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
 
         noise = torch.randn_like(image_prompts[0])
-        
+
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # Small noise
@@ -416,49 +473,113 @@ class StableDiffusionPipeline(DiffusionPipeline):
 
                 img_conditions = []
                 for i in range(ref_image_num):
-                    if stage == 'auto-regressive':
-                        noisy_image_prompt = self.scheduler.add_noise(image_prompts[i], noise, ref_t * (ref_image_num - i))
-                        noisy_zero_image_prompt = self.scheduler.add_noise(zero_image_prompts[i], noise, ref_t * (ref_image_num - i))
-                    elif stage == 'multi-image-condition':
-                        noisy_image_prompt = self.scheduler.add_noise(image_prompts[i], noise, ref_t)
-                        noisy_zero_image_prompt = self.scheduler.add_noise(zero_image_prompts[i], noise, ref_t)
+                    if stage == "auto-regressive":
+                        noisy_image_prompt = self.scheduler.add_noise(
+                            image_prompts[i], noise, ref_t * (ref_image_num - i)
+                        )
+                        noisy_zero_image_prompt = self.scheduler.add_noise(
+                            zero_image_prompts[i], noise, ref_t * (ref_image_num - i)
+                        )
+                    elif stage == "multi-image-condition":
+                        noisy_image_prompt = self.scheduler.add_noise(
+                            image_prompts[i], noise, ref_t
+                        )
+                        noisy_zero_image_prompt = self.scheduler.add_noise(
+                            zero_image_prompts[i], noise, ref_t
+                        )
                     else:
                         noisy_image_prompt = image_prompts[i]
                         noisy_zero_image_prompt = zero_image_prompts[i]
-                    
-                    noisy_image_prompt = torch.cat([noisy_zero_image_prompt, noisy_image_prompt, noisy_image_prompt]) if do_classifier_free_guidance else noisy_image_prompt # [3B,4,64,64]
-                    p_text_embeddings = torch.cat([prev_text_embeddings[i], prev_text_embeddings[i][num_images_per_prompt:]]) if do_classifier_free_guidance else prev_text_embeddings
-                                    
-                    if stage == 'multi-image-condition':
-                        img_dif_condition = self.unet(noisy_image_prompt, ref_t, encoder_hidden_states=p_text_embeddings, return_dict=False)[1]
-                    elif stage == 'auto-regressive':
-                        img_dif_condition =  self.unet(noisy_image_prompt, ref_t * (ref_image_num - i), encoder_hidden_states=p_text_embeddings, return_dict=False)[1]
+
+                    noisy_image_prompt = (
+                        torch.cat(
+                            [
+                                noisy_zero_image_prompt,
+                                noisy_image_prompt,
+                                noisy_image_prompt,
+                            ]
+                        )
+                        if do_classifier_free_guidance
+                        else noisy_image_prompt
+                    )  # [3B,4,64,64]
+                    p_text_embeddings = (
+                        torch.cat(
+                            [
+                                prev_text_embeddings[i],
+                                prev_text_embeddings[i][num_images_per_prompt:],
+                            ]
+                        )
+                        if do_classifier_free_guidance
+                        else prev_text_embeddings
+                    )
+
+                    if stage == "multi-image-condition":
+                        img_dif_condition = self.unet(
+                            noisy_image_prompt,
+                            ref_t,
+                            encoder_hidden_states=p_text_embeddings,
+                            return_dict=False,
+                        )[1]
+                    elif stage == "auto-regressive":
+                        img_dif_condition = self.unet(
+                            noisy_image_prompt,
+                            ref_t * (ref_image_num - i),
+                            encoder_hidden_states=p_text_embeddings,
+                            return_dict=False,
+                        )[1]
                     else:
                         img_dif_condition = None
                     img_conditions.append(img_dif_condition)
 
-                if stage == 'multi-image-condition' or stage == 'auto-regressive':
-                  img_dif_conditions = {}
-                  for k,v in img_conditions[0].items():
-                      img_dif_conditions[k] = torch.cat([img_condition[k] for img_condition in img_conditions], dim=1)
+                if stage == "multi-image-condition" or stage == "auto-regressive":
+                    img_dif_conditions = {}
+                    for k, v in img_conditions[0].items():
+                        img_dif_conditions[k] = torch.cat(
+                            [img_condition[k] for img_condition in img_conditions],
+                            dim=1,
+                        )
                 else:
-                  img_dif_conditions = None
-                
-                # expand the inputs if we are doing classifier free guidance
-                t_embeddings = torch.cat([text_embeddings[:num_images_per_prompt], text_embeddings]) if do_classifier_free_guidance else text_embeddings
+                    img_dif_conditions = None
 
-                latent_model_input = torch.cat([latents] * 3) if do_classifier_free_guidance else latents
-                latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+                # expand the inputs if we are doing classifier free guidance
+                t_embeddings = (
+                    torch.cat(
+                        [text_embeddings[:num_images_per_prompt], text_embeddings]
+                    )
+                    if do_classifier_free_guidance
+                    else text_embeddings
+                )
+
+                latent_model_input = (
+                    torch.cat([latents] * 3) if do_classifier_free_guidance else latents
+                )
+                latent_model_input = self.scheduler.scale_model_input(
+                    latent_model_input, t
+                )
                 # predict the noise residual
-                noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=t_embeddings,image_hidden_states=img_dif_conditions, return_dict=False)[0].to(dtype=latents.dtype)
+                noise_pred = self.unet(
+                    latent_model_input,
+                    t,
+                    encoder_hidden_states=t_embeddings,
+                    image_hidden_states=img_dif_conditions,
+                    return_dict=False,
+                )[0].to(dtype=latents.dtype)
                 # noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=t_embeddings,image_hidden_states=None).sample.to(dtype=latents.dtype)
                 # perform guidance
                 if do_classifier_free_guidance:
-                    noise_pred_uncond, noise_pred_image, noise_pred_all = noise_pred.chunk(3)
-                    noise_pred = noise_pred_uncond + image_guidance_scale * (noise_pred_image - noise_pred_uncond)  + guidance_scale * (noise_pred_all - noise_pred_image)
+                    noise_pred_uncond, noise_pred_image, noise_pred_all = (
+                        noise_pred.chunk(3)
+                    )
+                    noise_pred = (
+                        noise_pred_uncond
+                        + image_guidance_scale * (noise_pred_image - noise_pred_uncond)
+                        + guidance_scale * (noise_pred_all - noise_pred_image)
+                    )
 
                 # compute the previous noisy sample x_t -> x_t-1
-                latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
+                latents = self.scheduler.step(
+                    noise_pred, t, latents, **extra_step_kwargs
+                ).prev_sample
 
                 # call the callback, if provided
                 if i == len(timesteps) - 1 or (
@@ -470,7 +591,7 @@ class StableDiffusionPipeline(DiffusionPipeline):
 
         # 8. Post-processing
         image = self.decode_latents(latents)
-        
+
         # 9. Run safety checker
         has_nsfw_concept = None
 
@@ -481,7 +602,9 @@ class StableDiffusionPipeline(DiffusionPipeline):
         if not return_dict:
             return (image, has_nsfw_concept)
 
-        return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)
+        return StableDiffusionPipelineOutput(
+            images=image, nsfw_content_detected=has_nsfw_concept
+        )
 
     @staticmethod
     def numpy_to_pil(images):

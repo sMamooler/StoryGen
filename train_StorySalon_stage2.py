@@ -240,7 +240,7 @@ def train(
     # val_dataset = StorySalonDataset(root="./StorySalon/", dataset_name="test")
 
     train_dataset = VWPDataset("train", args)
-    val_dataset = VWPDataset("test", args)
+    val_dataset = VWPDataset("val", args)
 
     print(train_dataset.__len__())
     print(val_dataset.__len__())
@@ -370,7 +370,9 @@ def train(
 
         # Use random number of reference frames for training
         for i in range(args.num_ref_imgs):
-            if (p < 0.3) or (0.3 <= p < 0.6 and i > 0) or (p >= 0.6 and i > 1):
+            if (args.num_ref_imgs == 1) or (
+                (p < 0.3) or (0.3 <= p < 0.6 and i > 0) or (p >= 0.6 and i > 1)
+            ):
                 noisy_ref_image = noise_scheduler.add_noise(
                     ref_image_list[i],
                     ref_noise,
