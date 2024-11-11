@@ -1,0 +1,27 @@
+pretrained_model_path: "./stage2_log/_241109-150350/checkpoint_50000"
+logdir: "./inference/"
+
+num_inference_steps: 100
+guidance_scale: 7
+image_guidance_scale: 3.5
+num_sample_per_prompt: 1
+mixed_precision: "fp16"
+stage: "auto-regressive"  # ["multi-image-condition", "auto-regressive", "no"]
+test_batch_size: 1
+# task
+dataset: vwp  # pororo flintstones vistsis vistdii
+out_mode: images
+task: visualization  # continuation visualization
+
+num_ref_imgs: 1
+
+start: 0  #0, 106, 212, 318, 424, 530, 636, 742
+end: 1  #106, 212, 318, 424, 530, 636, 742, 849
+
+vwp:
+  root_dir: /mnt/u14157_ic_nlp_001_files_nfs/nlpdata1/home/mamooler/storyboard/StoryGen/VWP/
+  max_length: 400
+  clip_embedding_tokens: 49408
+  blip_embedding_tokens: 30524
+  img_width: 512
+  img_height: 512

@@ -1,11 +1,11 @@
 pretrained_model_path: "./ckpt/models--stable-diffusion-v1-5--stable-diffusion-v1-5/snapshots/f03de327dd89b501a01da37fc5240cf4fdba85a1"
 logdir: "./stage1_log/"
 validation_sample_logger:
-    num_inference_steps: 40
+    num_inference_steps: 250
     guidance_scale: 7
 gradient_accumulation_steps: 10
 train_batch_size: 12
-train_steps: 15000
+train_steps: 40000
 validation_steps: 500
 checkpointing_steps: 5000
 seed: 6666

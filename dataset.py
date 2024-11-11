@@ -12,6 +12,7 @@ from transformers import CLIPTokenizer
 from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
 from nltk.tokenize import word_tokenize
+from torchvision.utils import save_image
 
 import nltk
 
@@ -808,51 +809,51 @@ class VWPDataset(Dataset):
             args, sample, attribute_name, attribute_list
         ) -> None:
 
-            if args.num_ref_imgs == 1:
-                for i in range(len(sample[attribute_name])):
-                    if i == 0:
-                        pad_element = PAD_IMG if attribute_name == "image_links" else ""
-                        attribute_list.append([pad_element, sample[attribute_name][i]])
-                    else:
-                        attribute_list.append(
-                            [
-                                sample[attribute_name][i - 1],
-                                sample[attribute_name][i],
-                            ]
-                        )
-            else:
-                if len(sample[attribute_name]) <= args.num_ref_imgs:
-                    print(sample["scene_full_id"])
-                    return
-                for i in range(len(sample[attribute_name]) - args.num_ref_imgs):
-                    attribute_list.append(
-                        sample[attribute_name][i : i + args.num_ref_imgs + 1]
-                    )
+            # if args.num_ref_imgs == 1:
+            #     for i in range(len(sample[attribute_name])):
+            #         if i == 0:
+            #             pad_element = PAD_IMG if attribute_name == "image_links" else ""
+            #             attribute_list.append([pad_element, sample[attribute_name][i]])
+            #         else:
+            #             attribute_list.append(
+            #                 [
+            #                     sample[attribute_name][i - 1],
+            #                     sample[attribute_name][i],
+            #                 ]
+            #             )
+            # else:
+            if len(sample[attribute_name]) <= args.num_ref_imgs:
+                print(sample["scene_full_id"])
+                return
+            for i in range(len(sample[attribute_name]) - args.num_ref_imgs):
+                attribute_list.append(
+                    sample[attribute_name][i : i + args.num_ref_imgs + 1]
+                )
 
         for sample in vwp_data:
 
             if subset in ["train", "val"]:
-                if args.num_ref_imgs == 1:
-                    for i in range(len(sample["image_links"])):
-                        self.annt_ids.append(
-                            sample["scene_full_id"]
-                            + "_"
-                            + str(sample["story_id"])
-                            + "_"
-                            + str(i)
-                        )
-                else:
-                    if len(sample["image_links"]) <= args.num_ref_imgs:
-                        print(sample["scene_full_id"])
-                        return
-                    for i in range(len(sample["image_links"]) - args.num_ref_imgs):
-                        self.annt_ids.append(
-                            sample["scene_full_id"]
-                            + "_"
-                            + str(sample["story_id"])
-                            + "_"
-                            + str(i)
-                        )
+                # if args.num_ref_imgs == 1:
+                #     for i in range(len(sample["image_links"])):
+                #         self.annt_ids.append(
+                #             sample["scene_full_id"]
+                #             + "_"
+                #             + str(sample["story_id"])
+                #             + "_"
+                #             + str(i)
+                #         )
+                # else:
+                if len(sample["image_links"]) <= args.num_ref_imgs:
+                    print(sample["scene_full_id"])
+                    return
+                for i in range(len(sample["image_links"]) - args.num_ref_imgs):
+                    self.annt_ids.append(
+                        sample["scene_full_id"]
+                        + "_"
+                        + str(sample["story_id"])
+                        + "_"
+                        + str(i)
+                    )
 
                 add_ref_and_cur_frames(self.args, sample, "narrative", self.narratives)
                 add_ref_and_cur_frames(self.args, sample, "image_links", self.images)
@@ -893,21 +894,21 @@ class VWPDataset(Dataset):
                         links_set.append(links)
 
                     if subset in ["train", "val"]:
-                        if self.args.num_ref_imgs == 1:
-                            for i in range(len(links_set)):
-                                if i == 0:
-                                    self.links[ent_type + "_" + link_type].append(
-                                        [{}, links_set[i]]
-                                    )
-                                else:
-                                    self.links[ent_type + "_" + link_type].append(
-                                        [links_set[i - 1], links_set[i]]
-                                    )
-                        else:
-                            for i in range(len(links_set) - self.args.num_ref_imgs):
-                                self.links[ent_type + "_" + link_type].append(
-                                    links_set[i : i + self.args.num_ref_imgs + 1]
-                                )
+                        # if self.args.num_ref_imgs == 1:
+                        #     for i in range(len(links_set)):
+                        #         if i == 0:
+                        #             self.links[ent_type + "_" + link_type].append(
+                        #                 [{}, links_set[i]]
+                        #             )
+                        #         else:
+                        #             self.links[ent_type + "_" + link_type].append(
+                        #                 [links_set[i - 1], links_set[i]]
+                        #             )
+                        # else:
+                        for i in range(len(links_set) - self.args.num_ref_imgs):
+                            self.links[ent_type + "_" + link_type].append(
+                                links_set[i : i + self.args.num_ref_imgs + 1]
+                            )
                     else:
                         self.links[ent_type + "_" + link_type].append(links_set)
 
@@ -940,10 +941,6 @@ class VWPDataset(Dataset):
         self.clip_tokenizer = CLIPTokenizer.from_pretrained(
             "runwayml/stable-diffusion-v1-5", subfolder="tokenizer"
         )
-
-    # def open_h5(self):
-    #     h5 = h5py.File(self.h5_file, "r")
-    #     self.h5 = h5[self.subset]
 
     def _get_caption(self, sid, add_links=False):
         if add_links:
@@ -1071,8 +1068,6 @@ class VWPDataset(Dataset):
         mask = torch.from_numpy(np.ascontiguousarray(mask)).float()
         mask = self.augment(mask)
 
-        from torchvision.utils import save_image
-
         # for i, im in enumerate(ref_images):
         #     save_image(
         #         (im + 1) / 2,
@@ -1099,18 +1094,18 @@ class VWPDataset(Dataset):
         #     (mask + 1) / 2, f"dataloader_samples_test/{self.annt_ids[index]}_mask.png"
         # )
 
-        if self.subset == "test":
-            # save images and prompts
-            for i, im in enumerate(image):
-                save_image(
-                    (im + 1) / 2,
-                    f"dataloader_samples_test/{self.annt_ids[index]}_image_{i}.png",
-                )
-                with open(
-                    f"dataloader_samples_test/{self.annt_ids[index]}_prompt_{i}.txt",
-                    "w",
-                ) as f:
-                    f.write(texts[i])
+        # if self.subset == "test":
+        #     # save images and prompts
+        #     for i, im in enumerate(image):
+        #         save_image(
+        #             (im + 1) / 2,
+        #             f"dataloader_samples_test/{self.annt_ids[index]}_image_{i}.png",
+        #         )
+        #         with open(
+        #             f"dataloader_samples_test/{self.annt_ids[index]}_prompt_{i}.txt",
+        #             "w",
+        #         ) as f:
+        #             f.write(texts[i])
 
         return {
             "sample_id": self.annt_ids[index],

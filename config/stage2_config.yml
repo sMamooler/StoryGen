@@ -1,7 +1,7 @@
-pretrained_model_path: "./stage1_log/_241104-134827/checkpoint_15000" #"./stage1_log/_241030-095658/checkpoint_15000"
+pretrained_model_path: "./stage1_log/_241106-180030/checkpoint_15000" #"./stage1_log/_241106-175003/checkpoint_15000"
 logdir: "./stage2_log/"
 validation_sample_logger:
-    num_inference_steps: 40
+    num_inference_steps: 250
     guidance_scale: 7
 gradient_accumulation_steps: 8
 train_steps: 50000

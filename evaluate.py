@@ -15,7 +15,6 @@ from diffusers import AutoencoderKL, DDIMScheduler
 from diffusers.utils.import_utils import is_xformers_available
 from transformers import AutoTokenizer, CLIPTextModel
 from torchvision import transforms
-from torchvision.utils import save_image
 
 from dataset import VWPDataset
 from model.unet_2d_condition import UNet2DConditionModel
@@ -103,12 +102,13 @@ def sample(args: OmegaConf) -> None:
     else:
         end = len(test_dataset)
 
-    test_dataset = torch.utils.data.Subset(test_dataset, range(start, end))
+    # test_dataset = torch.utils.data.Subset(test_dataset, range(start, end))
+
     test_dataloader = torch.utils.data.DataLoader(
         test_dataset, batch_size=args.test_batch_size, shuffle=False, num_workers=1
     )
 
-    log_dir = os.path.join(args.logdir, args.out_mode)
+    log_dir = os.path.join(args.logdir, args.out_mode, f"{start}_{end}")
     save_dir_gold = os.path.join(log_dir, "gold/")
     os.makedirs(save_dir_gold, exist_ok=True)
     save_dir_pred = os.path.join(log_dir, "pred/")
@@ -128,8 +128,6 @@ def sample(args: OmegaConf) -> None:
     with torch.no_grad():
         predictions = []
         for batch_id, batch in enumerate(test_dataloader):
-            if batch_id >= 1:
-                break
             # a test sample consists of a complete story:
             # prompt for each frame
             # image for each frame
@@ -141,19 +139,20 @@ def sample(args: OmegaConf) -> None:
                 prompts
             ), f"The number of prompts should be the same as the number of images, num prompts: {len(prompts)}, num images: {original_images[0].shape}"
 
-            image_prompt = original_images  # Note: this is a dummy and won't be used for the first frames
+            image_prompt = original_images
             prev_prompt = ["" for _ in range(len(image_prompt[0]))]
             batch_generations = []
 
             for turn in range(len(prompts)):
                 prompt = prompts[turn][0]
-                if turn == 0:
+                if turn == 1:
                     stage = "no"  # first frame is generated without any guidance
                 else:
                     stage = "auto-regressive"
 
                 # this should be per sample, and not per batch. It is repeated autoregressively untill all frames in the story are generated
                 # TODO: does the previous generated image need post-processing before being used as guidance?
+                print(prompt)
                 curr_gen = pipeline(
                     stage=stage,
                     prompt=prompt,
@@ -177,9 +176,16 @@ def sample(args: OmegaConf) -> None:
                 image_prompt = transforms.Normalize([0.5], [0.5])(
                     curr_gen.unsqueeze(1)
                 )  # (B,1,3,512,512)
-                prev_prompt = prompt
+                prev_prompt = [prompt]
+                assert len(image_prompt) == len(
+                    prev_prompt
+                ), "Prompt and image mismatch"
 
-            original_images = [transforms.ToPILImage()(im) for im in original_images[0]]
+            original_images = [
+                transforms.ToPILImage(mode="RGB")(im) for im in original_images[0]
+            ][1:]
+            # original_images = original_images[0].cpu().numpy().astype("uint8")
+            # original_images = [Image.fromarray(im, "RGB") for im in original_images][1:]
 
             ori = inception_feature(
                 original_images,
@@ -202,8 +208,10 @@ def sample(args: OmegaConf) -> None:
     for output in predictions:
         sample_id = output[4][0]
         for i, gold in enumerate(output[0]):
+            gold = transforms.Resize((224, 512))(gold)
             gold.save(os.path.join(save_dir_gold, f"{sample_id}_{i}.jpg"))
         for i, pred in enumerate(output[1]):
+            pred = transforms.Resize((224, 512))(pred)
             pred.save(os.path.join(save_dir_pred, f"{sample_id}_{i}.jpg"))
 
     all_gold_images = [elem for output in predictions for elem in output[0]]
